@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "email-intel"
+version = "0.1.0"
+description = "Personal inbox intelligence — email header analysis CLI"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1",
+    "rich>=13.0",
+    "requests>=2.31",
+    "tomli>=2.0; python_version < '3.12'",
+]
+
+[project.optional-dependencies]
+gmail = [
+    "google-auth-oauthlib>=1.0",
+    "google-api-python-client>=2.100",
+]
+maxmind = ["geoip2>=4.8"]
+dev = ["pytest>=8.0", "pytest-cov>=4.1"]
+
+[project.scripts]
+email-intel = "email_intel.cli:main"
