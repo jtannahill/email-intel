@@ -247,4 +247,5 @@ def parse_headers(raw_headers: str) -> EmailAnalysis:
         reply_to_mismatch=reply_to_mismatch,
         is_bulk=is_bulk,
         flags=flags,
+        raw_headers=raw_headers,
     )
