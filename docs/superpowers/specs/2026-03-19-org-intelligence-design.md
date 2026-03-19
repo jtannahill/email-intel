@@ -64,6 +64,7 @@ A single detected change in an org's infrastructure.
 ```python
 @dataclass
 class StackChange:
+    id: int | None                  # SQLite rowid, None before insert
     domain: str
     timestamp: datetime
     field: str                      # e.g. "security_gateway_version"
@@ -106,6 +107,7 @@ Event emitted to Plocamium content engine.
 ```python
 @dataclass
 class OrgInfraSignal:
+    signal_id: int | None           # from StackChange.id, for deduplication
     domain: str
     entity_id: str | None
     entity_name: str
@@ -141,7 +143,9 @@ email_intel/
 
 ### Raw Headers Pass-Through
 
-The existing `parser.py` returns `EmailAnalysis` which doesn't preserve raw headers. The `org_profiler` needs access to the full raw header text to extract enterprise metadata (Titus, Proofpoint, Exchange routing headers). Solution: pass raw headers alongside the `EmailAnalysis` — the profiler receives both.
+The existing `parser.py` returns `EmailAnalysis` which doesn't preserve raw headers. The `org_profiler` needs access to the full raw header text to extract enterprise metadata (Titus, Proofpoint, Exchange routing headers).
+
+**Solution:** Add a `raw_headers: str | None` field to `EmailAnalysis` (default `None` for backward compatibility). The `parse_headers()` function stores the input string on the result. This avoids tuple-passing through the pipeline and keeps the existing API surface intact — callers that don't need raw headers are unaffected. The `scan` loop in `cli.py` passes `analysis.raw_headers` to the org profiler.
 
 ## Component Details
 
@@ -210,12 +214,15 @@ CREATE TABLE stack_changes (
     field TEXT NOT NULL,
     old_value TEXT,
     new_value TEXT,
-    signal TEXT,           -- positive, negative, neutral
+    signal TEXT,           -- positive, negative, neutral (filled after classification)
     confidence REAL,
     reasoning TEXT,
     category TEXT,
     FOREIGN KEY (domain) REFERENCES org_profiles(domain)
 );
+
+CREATE INDEX idx_stack_changes_domain ON stack_changes(domain);
+CREATE INDEX idx_stack_changes_timestamp ON stack_changes(timestamp);
 
 CREATE TABLE domain_entity_map (
     domain TEXT PRIMARY KEY,
@@ -226,47 +233,57 @@ CREATE TABLE domain_entity_map (
 );
 ```
 
-**Upsert logic:** On each email processed, extract `InfraStack`, compare field-by-field against `current_stack` in `org_profiles`. For each changed field, insert a `stack_changes` row. Update `current_stack`, `last_seen`, and `email_count`.
+**Upsert logic (two-phase write):**
+1. Extract `InfraStack`, compare field-by-field against `current_stack` in `org_profiles`
+2. For each changed field, INSERT a `stack_changes` row with `signal/confidence/reasoning/category = NULL`
+3. Return the list of `StackChange` objects (with `id` populated from SQLite)
+4. Caller runs classifier on each change, then calls `org_store.classify_change(change_id, classification)` which UPDATEs the classification columns
+5. Update `current_stack`, `last_seen`, and `email_count` on `org_profiles`
+
+**InfraStack serialization:** `InfraStack` is stored as JSON text via `dataclasses.asdict()` with a custom encoder: `datetime` → ISO 8601 string, `list`/`dict` pass through natively. Deserialization via `InfraStack(**json.loads(text))` with a datetime parser for `observed_at`. The `to_json()`/`from_json()` classmethods live on `InfraStack`.
+
+**File permissions:** `~/.email-intel/` directory is created with mode `0o700`. `orgs.db` and `signals.jsonl` inherit directory permissions. These files contain organizational intelligence derived from private emails.
 
 ### Change Classifier (`org_classifier.py`)
 
 **v1: Rules engine**
 
+Rules are a flat list of `(field, old_value, new_value) → (signal, category, reasoning)` tuples to avoid duplicate key collisions:
+
 ```python
-RULES = {
-    # Positive signals (investment/modernization)
-    "dmarc_policy": {
-        ("none", "quarantine"): ("positive", "security", "DMARC strengthened to quarantine"),
-        ("none", "reject"): ("positive", "security", "DMARC strengthened to reject"),
-        ("quarantine", "reject"): ("positive", "security", "DMARC hardened to reject"),
-    },
-    "tls_version": {
-        ("TLS1_0", "TLS1_2"): ("positive", "modernization", "TLS upgraded"),
-        ("TLS1_2", "TLS1_3"): ("positive", "modernization", "TLS upgraded to 1.3"),
-    },
-    "email_platform": {
-        ("on-prem-exchange", "m365"): ("positive", "migration", "Cloud migration to M365"),
-        ("on-prem-exchange", "google-workspace"): ("positive", "migration", "Cloud migration to Google"),
-    },
-    # Negative signals (cost-cutting/degradation)
-    "dmarc_policy": {
-        ("reject", "quarantine"): ("negative", "security", "DMARC weakened"),
-        ("reject", "none"): ("negative", "security", "DMARC removed"),
-    },
-    "tls_version": {
-        ("TLS1_3", "TLS1_2"): ("negative", "security", "TLS downgraded"),
-    },
-}
+TRANSITION_RULES: list[tuple[str, str, str, str, str, str]] = [
+    # (field, old, new, signal, category, reasoning)
+    # DMARC — positive
+    ("dmarc_policy", "none", "quarantine", "positive", "security", "DMARC strengthened to quarantine"),
+    ("dmarc_policy", "none", "reject", "positive", "security", "DMARC strengthened to reject"),
+    ("dmarc_policy", "quarantine", "reject", "positive", "security", "DMARC hardened to reject"),
+    # DMARC — negative
+    ("dmarc_policy", "reject", "quarantine", "negative", "security", "DMARC weakened"),
+    ("dmarc_policy", "reject", "none", "negative", "security", "DMARC removed"),
+    ("dmarc_policy", "quarantine", "none", "negative", "security", "DMARC removed"),
+    # TLS — positive
+    ("tls_version", "TLS1_0", "TLS1_2", "positive", "modernization", "TLS upgraded"),
+    ("tls_version", "TLS1_0", "TLS1_3", "positive", "modernization", "TLS upgraded to 1.3"),
+    ("tls_version", "TLS1_2", "TLS1_3", "positive", "modernization", "TLS upgraded to 1.3"),
+    # TLS — negative
+    ("tls_version", "TLS1_3", "TLS1_2", "negative", "security", "TLS downgraded"),
+    ("tls_version", "TLS1_2", "TLS1_0", "negative", "security", "TLS downgraded"),
+    # Platform — positive
+    ("email_platform", "on-prem-exchange", "m365", "positive", "migration", "Cloud migration to M365"),
+    ("email_platform", "on-prem-exchange", "google-workspace", "positive", "migration", "Cloud migration to Google"),
+    # Platform — negative
+    ("email_platform", "m365", "on-prem-exchange", "negative", "cost-cut", "Cloud to on-prem regression"),
+]
 ```
 
-Rules match on `(field, old_value, new_value)`. Unmatched changes default to `neutral`/`maintenance`.
+Lookup: build a dict keyed by `(field, old, new)` at import time. Unmatched transitions default to `neutral`/`maintenance`.
 
-Special logic:
-- Security gateway **added** = positive/security
-- Security gateway **removed** = negative/cost-cut
-- DLP system **added** = positive/security (compliance investment)
-- MTA version bump within 60 days of release = positive/maintenance (active patching)
-- MTA version >1 year behind latest = negative/maintenance (stale)
+**Special logic (presence/absence rules):**
+- Security gateway: `None→value` = positive/security, `value→None` = negative/cost-cut
+- DLP system: `None→value` = positive/security (compliance investment)
+- Security gateway **vendor change** = neutral/migration (switching, not adding/removing)
+
+**MTA version staleness** is deferred to v2 ML classifier — it requires maintaining an external release date lookup table, which adds complexity without enough signal in v1. For now, any MTA version change is classified as `neutral`/`maintenance`.
 
 **v2: Trained classifier** — once 50-100+ labeled changes accumulate, train a scikit-learn model (same pattern as Plocamium momentum scorer). Features: field name, old/new value categories, org sector, time since last change.
 
@@ -274,8 +291,8 @@ Special logic:
 
 **Resolution order:**
 1. Check `domain_entity_map` table for manual/plocamium mappings
-2. Query Plocamium entity store by domain (if bridge is configured)
-3. Fall back to display name from `From:` header, flag as `source=inferred`
+2. Query Plocamium entity store by domain — reads from a local JSON export (`~/.email-intel/entities.json`) synced from the content engine's DynamoDB entity table. The bridge does NOT make live API calls. Sync is manual: `email-intel orgs sync-entities` pulls the latest entity list from S3 or a configured export path. This keeps email-intel fully offline-capable.
+3. Fall back to domain name as `display_name` (e.g., `gs.com` → `gs.com`), flag as `source=inferred`, `entity_id=None`. Display names are only populated from entity map or manual mapping — never guessed from `From:` header personal names, since "Julia Yetter" is a person, not an org.
 
 **CLI for manual mapping:**
 ```bash
@@ -298,7 +315,10 @@ output = "local"            # local | s3
 local_path = ""             # default: ~/.email-intel/signals.jsonl
 s3_bucket = ""
 s3_prefix = "email-intel/"
+s3_profile = ""             # AWS profile name (optional, uses default boto3 credential chain if empty)
 ```
+
+**S3 authentication:** Uses the default boto3 credential chain (env vars → `~/.aws/credentials` → IAM role). The optional `s3_profile` config overrides with a named profile for multi-account setups. Signals are buffered in memory during a scan and written as a single batch JSONL upload at the end, not per-change.
 
 Content engine integration:
 - Signal maps to existing entity via `entity_id`
