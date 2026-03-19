@@ -25,6 +25,16 @@ class Config:
     default_limit: int = 500
     default_format: str = "table"
     cache_db_path: str = str(_DEFAULT_DIR / "geo_cache.db")
+    # Org profiling
+    orgs_enabled: bool = True
+    orgs_db_path: str = str(_DEFAULT_DIR / "orgs.db")
+    # Plocamium bridge
+    plocamium_enabled: bool = False
+    plocamium_output: str = "local"
+    plocamium_local_path: str = str(_DEFAULT_DIR / "signals.jsonl")
+    plocamium_s3_bucket: str = ""
+    plocamium_s3_prefix: str = "email-intel/"
+    plocamium_s3_profile: str = ""
 
 
 def load_config(config_path: str | None = None) -> Config:
@@ -46,6 +56,20 @@ def load_config(config_path: str | None = None) -> Config:
         cfg.default_days = defaults.get("days", cfg.default_days)
         cfg.default_limit = defaults.get("limit", cfg.default_limit)
         cfg.default_format = defaults.get("format", cfg.default_format)
+
+        orgs = data.get("orgs", {})
+        if "enabled" in orgs:
+            cfg.orgs_enabled = orgs["enabled"]
+        cfg.orgs_db_path = orgs.get("db_path") or cfg.orgs_db_path
+
+        ploc = data.get("plocamium", {})
+        if "enabled" in ploc:
+            cfg.plocamium_enabled = ploc["enabled"]
+        cfg.plocamium_output = ploc.get("output", cfg.plocamium_output)
+        cfg.plocamium_local_path = ploc.get("local_path") or cfg.plocamium_local_path
+        cfg.plocamium_s3_bucket = ploc.get("s3_bucket") or cfg.plocamium_s3_bucket
+        cfg.plocamium_s3_prefix = ploc.get("s3_prefix", cfg.plocamium_s3_prefix)
+        cfg.plocamium_s3_profile = ploc.get("s3_profile") or cfg.plocamium_s3_profile
 
     if os.environ.get("MAXMIND_DB_PATH"):
         cfg.maxmind_db_path = os.environ["MAXMIND_DB_PATH"]

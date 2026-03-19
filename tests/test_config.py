@@ -35,3 +35,34 @@ def test_config_env_override(tmp_path, monkeypatch):
     monkeypatch.setenv("MAXMIND_DB_PATH", "/env/path.mmdb")
     cfg = load_config(config_path="/nonexistent/config.toml")
     assert cfg.maxmind_db_path == "/env/path.mmdb"
+
+
+def test_config_org_defaults():
+    cfg = load_config(config_path="/nonexistent/config.toml")
+    assert cfg.orgs_enabled is True
+    assert cfg.orgs_db_path is not None
+    assert cfg.plocamium_enabled is False
+    assert cfg.plocamium_output == "local"
+
+
+def test_config_org_from_toml(tmp_path):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("""
+[orgs]
+enabled = false
+db_path = "/custom/orgs.db"
+
+[plocamium]
+enabled = true
+output = "s3"
+s3_bucket = "my-bucket"
+s3_prefix = "signals/"
+s3_profile = "prod"
+""")
+    cfg = load_config(config_path=str(config_file))
+    assert cfg.orgs_enabled is False
+    assert cfg.orgs_db_path == "/custom/orgs.db"
+    assert cfg.plocamium_enabled is True
+    assert cfg.plocamium_output == "s3"
+    assert cfg.plocamium_s3_bucket == "my-bucket"
+    assert cfg.plocamium_s3_profile == "prod"
