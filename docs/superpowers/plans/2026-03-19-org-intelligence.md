@@ -271,7 +271,19 @@ class OrgInfraSignal:
 
 - [ ] **Step 4: Modify `parser.py` to store raw_headers**
 
-In `parse_headers()` function, add `raw_headers=raw_headers` to the `EmailAnalysis(...)` return call. The parameter name is `raw_headers` and the input variable is also `raw_headers`.
+In `email_intel/parser.py`, find the `return EmailAnalysis(...)` call at the end of `parse_headers()` and add `raw_headers=raw_headers` as the last keyword argument. The exact edit:
+
+Replace:
+```python
+        flags=flags,
+    )
+```
+at the end of `parse_headers()` with:
+```python
+        flags=flags,
+        raw_headers=raw_headers,
+    )
+```
 
 - [ ] **Step 5: Run tests and verify pass**
 
@@ -1000,8 +1012,9 @@ class OrgStore:
         self._init_db()
 
     def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path, timeout=10)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
     def _init_db(self):
@@ -1705,42 +1718,57 @@ git commit -m "feat: extend config with org profiling + Plocamium bridge setting
 
 ```python
 # tests/test_cli_orgs.py
+from unittest.mock import patch
 from click.testing import CliRunner
 from email_intel.cli import main
+from email_intel.config import Config
 
 
-def test_orgs_list_empty():
+def _test_config(tmp_path) -> Config:
+    """Return a Config pointing at tmp_path for test isolation."""
+    return Config(
+        orgs_db_path=str(tmp_path / "orgs.db"),
+        cache_db_path=str(tmp_path / "geo_cache.db"),
+        plocamium_enabled=False,
+        plocamium_local_path=str(tmp_path / "signals.jsonl"),
+    )
+
+
+def test_orgs_list_empty(tmp_path):
     runner = CliRunner()
-    result = runner.invoke(main, ["orgs"])
+    with patch("email_intel.cli.load_config", return_value=_test_config(tmp_path)):
+        result = runner.invoke(main, ["orgs"])
     assert result.exit_code == 0
-    assert "No org profiles" in result.output or "0" in result.output
+    assert "No org profiles" in result.output
 
 
 def test_orgs_map_and_show(tmp_path):
     runner = CliRunner()
-    # Map first
-    result = runner.invoke(main, [
-        "orgs", "map", "gs.com", "Goldman Sachs",
-        "--sector", "Financial Services",
-    ])
-    assert result.exit_code == 0
+    cfg = _test_config(tmp_path)
+    with patch("email_intel.cli.load_config", return_value=cfg):
+        # Map first
+        result = runner.invoke(main, [
+            "orgs", "map", "gs.com", "Goldman Sachs",
+            "--sector", "Financial Services",
+        ])
+        assert result.exit_code == 0
 
-    # Check it's mapped
-    result = runner.invoke(main, ["orgs", "gs.com"])
-    # Will show domain even without profile (entity map exists)
-    assert result.exit_code == 0
+        # Show detail
+        result = runner.invoke(main, ["orgs", "show", "gs.com"])
+        assert result.exit_code == 0
+        assert "gs.com" in result.output
 
 
-def test_changes_empty():
+def test_changes_empty(tmp_path):
     runner = CliRunner()
-    result = runner.invoke(main, ["changes"])
+    with patch("email_intel.cli.load_config", return_value=_test_config(tmp_path)):
+        result = runner.invoke(main, ["changes"])
     assert result.exit_code == 0
-    assert "No changes" in result.output or "0" in result.output
+    assert "No changes" in result.output
 
 
 def test_scan_with_profile(gmail_headers):
     runner = CliRunner()
-    # Analyze triggers profiling
     result = runner.invoke(main, ["analyze", "--format", "json"], input=gmail_headers)
     assert result.exit_code == 0
 ```
@@ -1797,6 +1825,55 @@ def orgs(ctx):
                 p.last_seen.strftime("%Y-%m-%d"),
             )
         console.print(table)
+
+
+@orgs.command("show")
+@click.argument("domain")
+def orgs_show(domain):
+    """Show detailed profile for a specific org."""
+    cfg = load_config()
+    store = OrgStore(db_path=cfg.orgs_db_path)
+    profile = store.get_profile(domain)
+    entity = store.resolve_entity(domain)
+
+    if not profile and not entity:
+        console.print(f"No profile or entity mapping found for {domain}")
+        return
+
+    if entity:
+        console.print(f"[bold]{entity.entity_name}[/bold] ({domain})")
+        if entity.sector:
+            console.print(f"Sector: {entity.sector}")
+        console.print(f"Source: {entity.source}")
+        console.print()
+
+    if profile:
+        s = profile.current_stack
+        from rich.table import Table
+        table = Table(title="Infrastructure Stack")
+        table.add_column("Field")
+        table.add_column("Value")
+        table.add_row("MTA", f"{s.mta_vendor or '?'} {s.mta_version or ''}")
+        table.add_row("Platform", s.email_platform or "?")
+        table.add_row("Security Gateway", f"{s.security_gateway or '-'} {s.security_gateway_version or ''}")
+        table.add_row("TLS", f"{s.tls_version or '?'} / {s.tls_cipher or '?'}")
+        table.add_row("DMARC", s.dmarc_policy or "?")
+        table.add_row("DLP", s.dlp_system or "-")
+        table.add_row("Tenant ID", s.tenant_id or "-")
+        table.add_row("DKIM Domains", ", ".join(s.dkim_domains) if s.dkim_domains else "-")
+        console.print(table)
+        console.print(f"\nEmails observed: {profile.email_count}")
+        console.print(f"First seen: {profile.first_seen.strftime('%Y-%m-%d')}")
+        console.print(f"Last seen: {profile.last_seen.strftime('%Y-%m-%d')}")
+
+        # Show recent changes
+        changes = store.get_changes(domain=domain)
+        if changes:
+            console.print(f"\n[bold]Recent Changes ({len(changes)}):[/bold]")
+            for c in changes[:10]:
+                console.print(f"  {c.timestamp.strftime('%Y-%m-%d')} {c.field}: {c.old_value} → {c.new_value}")
+    else:
+        console.print(f"Entity mapped but no email profile yet. Run a scan to populate.")
 
 
 @orgs.command("map")
@@ -1936,6 +2013,8 @@ Also modify the `scan` command to add `--profile` flag and org profiling logic. 
 
         bridge.flush()
 ```
+
+**Note:** `orgs sync-entities` (loading entity mappings from Plocamium JSON export) is deferred — manual `orgs map` covers the use case for now. Will add when the content engine export pipeline is wired.
 
 Add `--profile/--no-profile` option to the scan command decorator:
 
