@@ -177,15 +177,23 @@ Filter controls:
 - Minimal borders, clean spacing
 - Responsive (works on laptop screens)
 
+## Prerequisites
+
+**`OrgStore.get_changes()` must be extended** to return classification fields. The current method returns `StackChange` objects which lack `signal`, `confidence`, `reasoning`, `category` — but these columns exist in the `stack_changes` table (populated by `classify_change()`). The dashboard server will query raw DB rows directly to include all columns, avoiding model changes. A helper method `get_changes_with_classification()` returns dicts with all fields.
+
+**`/api/stats` aggregations** are computed server-side by iterating `list_profiles()` and bucketing. Fine for 147 orgs.
+
 ## Server Implementation
 
 `dashboard.py` subclasses `http.server.BaseHTTPRequestHandler`:
 
-- Routes: parse URL path, dispatch to handler methods
-- API handlers: instantiate `OrgStore`, query, serialize to JSON, return with `application/json` content type
-- HTML handler: read and serve `dashboard.html`
+- Routes: parse URL path, dispatch to handler methods. All non-API, non-root paths return 404.
+- **Single `OrgStore` instance** created at server start and shared across requests (avoids re-running `CREATE TABLE IF NOT EXISTS` per request)
+- API handlers: query store, serialize to JSON, return with `application/json` content type
+- HTML handler: read and serve `dashboard.html` only — not a general file server
 - CORS: not needed (same origin)
 - Error handling: 404 for unknown routes, 500 with JSON error for API failures
+- **Single-threaded** (`HTTPServer`, not `ThreadingHTTPServer`) — appropriate for localhost single-user
 
 Launched via:
 ```python
@@ -204,7 +212,8 @@ email-intel dashboard [--port 8888] [--no-open]
 - Starts the HTTP server
 - Opens `http://localhost:8888` in default browser (unless `--no-open`)
 - Prints "Dashboard running at http://localhost:8888 (Ctrl+C to stop)"
-- Blocks until Ctrl+C
+- Blocks until Ctrl+C (`try/except KeyboardInterrupt` with `server.shutdown()` for clean exit)
+- **Port in use:** catches `OSError` and prints clear message ("Port 8888 already in use. Try --port 8889")
 
 ## Error Handling
 
