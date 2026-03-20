@@ -394,3 +394,36 @@ def changes(days, signal, domain):
         table.add_row(c.timestamp.strftime("%Y-%m-%d"), c.domain, c.field,
             c.old_value or "-", c.new_value or "-")
     console.print(table)
+
+
+@main.command()
+@click.option("--port", type=int, default=8888, help="Server port")
+@click.option("--no-open", is_flag=True, help="Don't open browser")
+def dashboard(port, no_open):
+    """Launch the org intelligence dashboard in your browser."""
+    cfg = load_config()
+    from email_intel.dashboard import create_server
+    from email_intel.org_store import OrgStore as _OrgStore
+
+    store = _OrgStore(db_path=cfg.orgs_db_path)
+
+    try:
+        server = create_server(store, port=port)
+    except OSError as e:
+        if "Address already in use" in str(e) or "address already in use" in str(e):
+            console.print(f"[red]Port {port} already in use. Try --port {port + 1}[/red]")
+            sys.exit(1)
+        raise
+
+    url = f"http://localhost:{port}"
+    console.print(f"Dashboard running at [bold]{url}[/bold] (Ctrl+C to stop)")
+
+    if not no_open:
+        import webbrowser
+        webbrowser.open(url)
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        console.print("\nShutting down...")
+        server.shutdown()
