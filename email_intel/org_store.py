@@ -181,6 +181,38 @@ class OrgStore:
             for r in rows
         ]
 
+    def get_changes_with_classification(
+        self, domain: str | None = None, days: int | None = None, signal: str | None = None,
+    ) -> list[dict]:
+        """Like get_changes but returns dicts with classification fields included."""
+        conn = self._conn()
+        query = "SELECT sc.*, op.display_name FROM stack_changes sc LEFT JOIN org_profiles op ON sc.domain = op.domain WHERE 1=1"
+        params: list = []
+        if domain:
+            query += " AND sc.domain = ?"
+            params.append(domain)
+        if days:
+            cutoff = (datetime.now(tz=timezone.utc) - timedelta(days=days)).isoformat()
+            query += " AND sc.timestamp >= ?"
+            params.append(cutoff)
+        if signal:
+            query += " AND sc.signal = ?"
+            params.append(signal)
+        query += " ORDER BY sc.timestamp DESC"
+        rows = conn.execute(query, params).fetchall()
+        conn.close()
+        return [
+            {
+                "id": r["id"], "domain": r["domain"],
+                "display_name": r["display_name"] or r["domain"],
+                "timestamp": r["timestamp"], "field": r["field"],
+                "old_value": r["old_value"], "new_value": r["new_value"],
+                "signal": r["signal"], "confidence": r["confidence"],
+                "reasoning": r["reasoning"], "category": r["category"],
+            }
+            for r in rows
+        ]
+
     def _get_change_row(self, change_id: int) -> sqlite3.Row | None:
         conn = self._conn()
         row = conn.execute("SELECT * FROM stack_changes WHERE id = ?", (change_id,)).fetchone()
