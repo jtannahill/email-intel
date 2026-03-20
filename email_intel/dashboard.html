@@ -1,4 +1,1201 @@
 <!DOCTYPE html>
-<html><head><title>Email Intel Dashboard</title></head>
-<body><h1>Dashboard placeholder — will be replaced in Task 2</h1></body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Intel</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #1a1a2e;
+      --surface:  #16213e;
+      --panel:    #0f3460;
+      --border:   #2a2a4a;
+      --text:     #e0e0e0;
+      --muted:    #888;
+      --accent:   #00d26a;
+      --danger:   #f92672;
+      --warn:     #f5c842;
+      --info:     #56ccf2;
+      --mono:     'Courier New', Courier, monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .logo span { color: var(--text); }
+
+    #stats-strip {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .stat-item .val {
+      font-size: 15px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+
+    .stat-item .lbl {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    main { padding: 20px 24px 60px; max-width: 1600px; margin: 0 auto; }
+
+    /* ── CHARTS ROW ── */
+    .charts-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 20px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .chart-card h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .chart-wrap {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .chart-wrap canvas { flex-shrink: 0; }
+
+    .chart-legend {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .legend-label { color: var(--text); }
+    .legend-count { color: var(--muted); margin-left: auto; }
+
+    /* ── CONTROLS ── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .controls input[type="text"],
+    .controls select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 7px 12px;
+      border-radius: 4px;
+      outline: none;
+    }
+
+    .controls input[type="text"] {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .controls input[type="text"]::placeholder { color: var(--muted); }
+
+    .controls input[type="text"]:focus,
+    .controls select:focus {
+      border-color: var(--accent);
+    }
+
+    .controls select { cursor: pointer; }
+
+    .count-badge {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
+    /* ── TABLE ── */
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead tr {
+      background: var(--panel);
+    }
+
+    thead th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid var(--border);
+    }
+
+    thead th:hover { color: var(--text); }
+
+    thead th.sort-asc::after  { content: ' ▲'; color: var(--accent); }
+    thead th.sort-desc::after { content: ' ▼'; color: var(--accent); }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    tbody tr.expanded { background: rgba(0, 210, 106, 0.05); }
+
+    tbody td {
+      padding: 9px 14px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+
+    .td-domain { font-weight: bold; color: var(--info); }
+    .td-name   { color: var(--text); }
+    .td-num    { text-align: right; color: var(--muted); font-size: 11px; }
+    .td-last   { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .badge-platform {
+      background: rgba(86, 204, 242, 0.15);
+      color: var(--info);
+      border: 1px solid rgba(86, 204, 242, 0.3);
+    }
+
+    .badge-reject {
+      background: #0a3d1f;
+      color: #00d26a;
+      border: 1px solid #00d26a44;
+    }
+
+    .badge-quarantine {
+      background: #3d3a0a;
+      color: #f5c842;
+      border: 1px solid #f5c84244;
+    }
+
+    .badge-none {
+      background: #3d0a1a;
+      color: #f92672;
+      border: 1px solid #f9267244;
+    }
+
+    .badge-unknown {
+      background: #2a2a2a;
+      color: #888;
+      border: 1px solid #44444488;
+    }
+
+    .badge-yes  { background: rgba(0,210,106,0.12); color: #00d26a; border: 1px solid #00d26a44; }
+    .badge-no   { background: rgba(249,38,114,0.12); color: #f92672; border: 1px solid #f9267244; }
+    .badge-info { background: rgba(86,204,242,0.12); color: #56ccf2; border: 1px solid #56ccf244; }
+
+    .badge-pos  { background: rgba(0,210,106,0.15);  color: #00d26a; border: 1px solid #00d26a44; }
+    .badge-neg  { background: rgba(249,38,114,0.15); color: #f92672; border: 1px solid #f9267244; }
+    .badge-neu  { background: rgba(136,136,136,0.15); color: #aaa;   border: 1px solid #55555588; }
+
+    /* ── INLINE DETAIL PANEL ── */
+    tr.detail-row td { padding: 0; }
+
+    .detail-panel {
+      background: #0d1226;
+      border-top: 1px solid var(--border);
+      border-bottom: 2px solid var(--accent);
+      padding: 20px 24px;
+      animation: slideDown 0.15s ease;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .detail-section h4 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detail-row-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 11px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .detail-row-item .k { color: var(--muted); }
+    .detail-row-item .v { color: var(--text); text-align: right; max-width: 60%; word-break: break-all; }
+
+    .changes-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .change-item-mini {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 11px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .change-item-mini .ts { color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+    .change-item-mini .desc { color: var(--text); flex: 1; }
+
+    .detail-loading {
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+      font-size: 12px;
+    }
+
+    /* ── SECTION TITLE ── */
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── CHANGE FEED ── */
+    .feed-header {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .signal-tabs {
+      display: flex;
+      gap: 4px;
+    }
+
+    .signal-tab {
+      padding: 5px 14px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+      cursor: pointer;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: all 0.1s;
+    }
+
+    .signal-tab:hover { color: var(--text); border-color: #555; }
+
+    .signal-tab.active-all  { background: rgba(136,136,136,0.2); color: var(--text); border-color: #666; }
+    .signal-tab.active-positive { background: rgba(0,210,106,0.15); color: #00d26a; border-color: #00d26a55; }
+    .signal-tab.active-negative { background: rgba(249,38,114,0.15); color: #f92672; border-color: #f9267255; }
+    .signal-tab.active-neutral  { background: rgba(136,136,136,0.15); color: #aaa; border-color: #55555588; }
+
+    .feed-days-wrap {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .feed-days-wrap label { font-size: 11px; color: var(--muted); }
+
+    .feed-days-wrap select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    #change-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .change-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 12px 16px;
+      display: grid;
+      grid-template-columns: 150px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      transition: border-color 0.1s;
+    }
+
+    .change-card:hover { border-color: #444; }
+
+    .change-card.sig-positive { border-left: 3px solid #00d26a; }
+    .change-card.sig-negative { border-left: 3px solid #f92672; }
+    .change-card.sig-neutral  { border-left: 3px solid #555; }
+
+    .change-ts {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .change-ts .date { display: block; }
+    .change-ts .time { display: block; color: #555; }
+
+    .change-body {}
+
+    .change-org {
+      font-size: 12px;
+      font-weight: bold;
+      color: var(--info);
+      margin-bottom: 3px;
+    }
+
+    .change-desc {
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .change-desc .field { color: var(--warn); }
+    .change-desc .old   { color: var(--danger); text-decoration: line-through; }
+    .change-desc .arrow { color: var(--muted); margin: 0 4px; }
+    .change-desc .new   { color: var(--accent); }
+
+    .change-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 5px;
+    }
+
+    .badge-category {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+
+    /* ── EMPTY / LOADING ── */
+    .empty-msg {
+      text-align: center;
+      color: var(--muted);
+      padding: 40px 20px;
+      font-size: 13px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .charts-row { flex-direction: column; }
+      .detail-grid { grid-template-columns: 1fr 1fr; }
+      .change-card { grid-template-columns: 1fr; }
+      #stats-strip { display: none; }
+    }
+
+    @media (max-width: 600px) {
+      .detail-grid { grid-template-columns: 1fr; }
+      main { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header>
+  <div class="logo">Email<span>Intel</span></div>
+  <div id="stats-strip">
+    <div class="stat-item">
+      <span class="val" id="stat-orgs">—</span>
+      <span class="lbl">Orgs</span>
+    </div>
+    <div class="stat-item">
+      <span class="val" id="stat-emails">—</span>
+      <span class="lbl">Emails</span>
+    </div>
+    <div class="stat-item">
+      <span class="val" id="stat-changes">—</span>
+      <span class="lbl">Changes (7d)</span>
+    </div>
+    <div class="stat-item">
+      <span class="val" id="stat-reject">—</span>
+      <span class="lbl">DMARC Reject</span>
+    </div>
+    <div class="stat-item">
+      <span class="val" id="stat-platforms">—</span>
+      <span class="lbl">Platforms</span>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════ MAIN ══════════════ -->
+<main>
+
+  <!-- CHARTS -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>Platform Breakdown</h3>
+      <div class="chart-wrap">
+        <canvas id="chart-platform" width="140" height="140"></canvas>
+        <div class="chart-legend" id="legend-platform"></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>DMARC Policy Breakdown</h3>
+      <div class="chart-wrap">
+        <canvas id="chart-dmarc" width="140" height="140"></canvas>
+        <div class="chart-legend" id="legend-dmarc"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <input type="text" id="search-input" placeholder="Search domain or org name…" oninput="filterOrgs()" />
+    <select id="filter-platform" onchange="filterOrgs()">
+      <option value="">All Platforms</option>
+    </select>
+    <select id="filter-dmarc" onchange="filterOrgs()">
+      <option value="">All DMARC</option>
+      <option value="reject">Reject</option>
+      <option value="quarantine">Quarantine</option>
+      <option value="none">None</option>
+      <option value="unknown">Unknown</option>
+    </select>
+    <span class="count-badge" id="row-count">Loading…</span>
+  </div>
+
+  <!-- ORG TABLE -->
+  <div class="table-wrap" id="table-wrap">
+    <table id="org-table">
+      <thead>
+        <tr>
+          <th onclick="sortOrgs('domain')">Domain</th>
+          <th onclick="sortOrgs('name')">Name</th>
+          <th onclick="sortOrgs('platform')">Platform</th>
+          <th onclick="sortOrgs('security_score')">Security</th>
+          <th onclick="sortOrgs('dmarc_policy')">DMARC</th>
+          <th onclick="sortOrgs('tls')">TLS</th>
+          <th onclick="sortOrgs('dlp')">DLP</th>
+          <th onclick="sortOrgs('email_count')" style="text-align:right">Emails</th>
+          <th onclick="sortOrgs('last_seen')">Last Seen</th>
+        </tr>
+      </thead>
+      <tbody id="org-tbody">
+        <tr><td colspan="9" class="empty-msg"><span class="spinner"></span>Loading orgs…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- CHANGE FEED -->
+  <div class="section-title">Change Feed</div>
+
+  <div class="feed-header">
+    <div class="signal-tabs">
+      <button class="signal-tab active-all" data-sig="all" onclick="setSignalTab(this, 'all')">All</button>
+      <button class="signal-tab" data-sig="positive" onclick="setSignalTab(this, 'positive')">Positive</button>
+      <button class="signal-tab" data-sig="negative" onclick="setSignalTab(this, 'negative')">Negative</button>
+      <button class="signal-tab" data-sig="neutral" onclick="setSignalTab(this, 'neutral')">Neutral</button>
+    </div>
+    <div class="feed-days-wrap">
+      <label>Last</label>
+      <select id="feed-days" onchange="loadChanges()">
+        <option value="7" selected>7 days</option>
+        <option value="14">14 days</option>
+        <option value="30">30 days</option>
+        <option value="90">90 days</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="change-feed">
+    <div class="empty-msg"><span class="spinner"></span>Loading changes…</div>
+  </div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let allOrgs      = [];
+let allChanges   = [];
+let filteredOrgs = [];
+let sortField    = 'domain';
+let sortDir      = 'asc';
+let expandedDomain = null;
+let activeSignal = 'all';
+let chartPlatform = null;
+let chartDmarc    = null;
+
+// ══════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════
+async function loadAll() {
+  try {
+    const [orgsRes, changesRes, statsRes] = await Promise.all([
+      fetch('/api/orgs'),
+      fetch('/api/changes?days=7'),
+      fetch('/api/stats'),
+    ]);
+
+    const [orgs, changes, stats] = await Promise.all([
+      orgsRes.json(),
+      changesRes.json(),
+      statsRes.json(),
+    ]);
+
+    allOrgs    = Array.isArray(orgs)    ? orgs    : [];
+    allChanges = Array.isArray(changes) ? changes : [];
+
+    renderStats(stats);
+    buildPlatformFilter();
+    buildCharts();
+    filterOrgs();
+    renderChangeFeed();
+  } catch (err) {
+    document.getElementById('org-tbody').innerHTML =
+      `<tr><td colspan="9" class="empty-msg">Error loading data: ${escHtml(String(err))}</td></tr>`;
+    console.error(err);
+  }
+}
+
+// ══════════════════════════════════════════
+//  STATS STRIP
+// ══════════════════════════════════════════
+function renderStats(stats) {
+  if (!stats) return;
+  setText('stat-orgs',      fmt(stats.total_orgs      ?? allOrgs.length));
+  setText('stat-emails',    fmt(stats.total_emails    ?? sumEmails()));
+  setText('stat-changes',   fmt(stats.total_changes   ?? allChanges.length));
+  setText('stat-reject',    fmt(stats.dmarc_reject    ?? countDmarc('reject')));
+  setText('stat-platforms', fmt(stats.unique_platforms ?? countPlatforms()));
+}
+
+function sumEmails()     { return allOrgs.reduce((s, o) => s + (o.email_count || 0), 0); }
+function countDmarc(p)   { return allOrgs.filter(o => (o.dmarc_policy||'').toLowerCase() === p).length; }
+function countPlatforms(){ return new Set(allOrgs.map(o => o.platform).filter(Boolean)).size; }
+
+// ══════════════════════════════════════════
+//  PLATFORM FILTER SELECT
+// ══════════════════════════════════════════
+function buildPlatformFilter() {
+  const platforms = [...new Set(allOrgs.map(o => o.platform).filter(Boolean))].sort();
+  const sel = document.getElementById('filter-platform');
+  platforms.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    sel.appendChild(opt);
+  });
+}
+
+// ══════════════════════════════════════════
+//  CHARTS
+// ══════════════════════════════════════════
+const PLATFORM_COLORS = [
+  '#56ccf2','#00d26a','#f5c842','#f92672',
+  '#c77dff','#ff9f43','#54a0ff','#5f27cd',
+  '#ee5a24','#0abde3',
+];
+
+const DMARC_COLORS = {
+  reject:     '#00d26a',
+  quarantine: '#f5c842',
+  none:       '#f92672',
+  unknown:    '#888',
+};
+
+function buildCharts() {
+  buildPlatformChart();
+  buildDmarcChart();
+}
+
+function buildPlatformChart() {
+  const counts = {};
+  allOrgs.forEach(o => {
+    const p = o.platform || 'Unknown';
+    counts[p] = (counts[p] || 0) + 1;
+  });
+  const labels = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  const data   = labels.map(l => counts[l]);
+  const colors = labels.map((_, i) => PLATFORM_COLORS[i % PLATFORM_COLORS.length]);
+
+  if (chartPlatform) chartPlatform.destroy();
+  chartPlatform = new Chart(document.getElementById('chart-platform'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 1, borderColor: '#1a1a2e' }] },
+    options: {
+      cutout: '65%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => ` ${ctx.label}: ${ctx.parsed}`
+      }}},
+      animation: { duration: 400 },
+    },
+  });
+
+  const total = data.reduce((s, v) => s + v, 0);
+  document.getElementById('legend-platform').innerHTML = labels.map((l, i) =>
+    `<div class="legend-item">
+      <div class="legend-dot" style="background:${colors[i]}"></div>
+      <span class="legend-label">${escHtml(l)}</span>
+      <span class="legend-count">${data[i]} <span style="color:#444">(${Math.round(data[i]/total*100)}%)</span></span>
+    </div>`
+  ).join('');
+}
+
+function buildDmarcChart() {
+  const order = ['reject','quarantine','none','unknown'];
+  const counts = { reject: 0, quarantine: 0, none: 0, unknown: 0 };
+  allOrgs.forEach(o => {
+    const p = (o.dmarc_policy || 'unknown').toLowerCase();
+    if (p in counts) counts[p]++;
+    else counts.unknown++;
+  });
+  const labels = order;
+  const data   = order.map(k => counts[k]);
+  const colors = order.map(k => DMARC_COLORS[k]);
+
+  if (chartDmarc) chartDmarc.destroy();
+  chartDmarc = new Chart(document.getElementById('chart-dmarc'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 1, borderColor: '#1a1a2e' }] },
+    options: {
+      cutout: '65%',
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => ` ${ctx.label}: ${ctx.parsed}`
+      }}},
+      animation: { duration: 400 },
+    },
+  });
+
+  const total = data.reduce((s, v) => s + v, 0) || 1;
+  document.getElementById('legend-dmarc').innerHTML = order.map((k, i) =>
+    `<div class="legend-item">
+      <div class="legend-dot" style="background:${colors[i]}"></div>
+      <span class="legend-label">${k}</span>
+      <span class="legend-count">${data[i]} <span style="color:#444">(${Math.round(data[i]/total*100)}%)</span></span>
+    </div>`
+  ).join('');
+}
+
+// ══════════════════════════════════════════
+//  ORG TABLE — FILTER + SORT
+// ══════════════════════════════════════════
+function filterOrgs() {
+  const q    = document.getElementById('search-input').value.trim().toLowerCase();
+  const plat = document.getElementById('filter-platform').value.toLowerCase();
+  const dmarc= document.getElementById('filter-dmarc').value.toLowerCase();
+
+  filteredOrgs = allOrgs.filter(o => {
+    if (q && !`${o.domain} ${o.name}`.toLowerCase().includes(q)) return false;
+    if (plat && (o.platform || '').toLowerCase() !== plat) return false;
+    if (dmarc && (o.dmarc_policy || 'unknown').toLowerCase() !== dmarc) return false;
+    return true;
+  });
+
+  applySort();
+  renderTable();
+}
+
+function sortOrgs(field) {
+  if (sortField === field) {
+    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortField = field;
+    sortDir = 'asc';
+  }
+  applySort();
+  renderTable();
+}
+
+function applySort() {
+  const dir = sortDir === 'asc' ? 1 : -1;
+  filteredOrgs.sort((a, b) => {
+    let av = a[sortField] ?? '';
+    let bv = b[sortField] ?? '';
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+    return String(av).toLowerCase().localeCompare(String(bv).toLowerCase()) * dir;
+  });
+}
+
+function renderTable() {
+  // Update header sort indicators
+  document.querySelectorAll('#org-table thead th').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+  });
+  const fields = ['domain','name','platform','security_score','dmarc_policy','tls','dlp','email_count','last_seen'];
+  const idx = fields.indexOf(sortField);
+  if (idx >= 0) {
+    const ths = document.querySelectorAll('#org-table thead th');
+    if (ths[idx]) ths[idx].classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+  }
+
+  document.getElementById('row-count').textContent =
+    `${filteredOrgs.length} of ${allOrgs.length} orgs`;
+
+  if (filteredOrgs.length === 0) {
+    document.getElementById('org-tbody').innerHTML =
+      `<tr><td colspan="9" class="empty-msg">No orgs match the current filters.</td></tr>`;
+    return;
+  }
+
+  const tbody = document.getElementById('org-tbody');
+  tbody.innerHTML = '';
+
+  filteredOrgs.forEach(org => {
+    const dmarcClass = dmarcBadgeClass(org.dmarc_policy);
+
+    const tr = document.createElement('tr');
+    tr.dataset.domain = org.domain;
+    if (expandedDomain === org.domain) tr.classList.add('expanded');
+    tr.innerHTML = `
+      <td class="td-domain">${escHtml(org.domain || '—')}</td>
+      <td class="td-name">${escHtml(org.name || '—')}</td>
+      <td><span class="badge badge-platform">${escHtml(org.platform || '?')}</span></td>
+      <td>${securityBar(org.security_score)}</td>
+      <td><span class="badge ${dmarcClass}">${escHtml((org.dmarc_policy || 'unknown').toLowerCase())}</span></td>
+      <td>${boolBadge(org.tls)}</td>
+      <td>${boolBadge(org.dlp)}</td>
+      <td class="td-num">${fmt(org.email_count)}</td>
+      <td class="td-last">${relTime(org.last_seen)}</td>
+    `;
+    tr.addEventListener('click', () => toggleDetail(org.domain, tr));
+    tbody.appendChild(tr);
+
+    // Re-inject detail row if this domain was expanded
+    if (expandedDomain === org.domain) {
+      const detailTr = buildDetailRowShell(org.domain);
+      tbody.appendChild(detailTr);
+      // Re-fetch detail so panel is populated
+      injectDetail(org.domain, detailTr.querySelector('.detail-panel'));
+    }
+  });
+}
+
+// ══════════════════════════════════════════
+//  INLINE DETAIL
+// ══════════════════════════════════════════
+function toggleDetail(domain, tr) {
+  const tbody = document.getElementById('org-tbody');
+
+  // Collapse if same
+  if (expandedDomain === domain) {
+    expandedDomain = null;
+    // Remove existing detail rows
+    removeDetailRows(tbody);
+    tr.classList.remove('expanded');
+    return;
+  }
+
+  // Collapse previous
+  removeDetailRows(tbody);
+  document.querySelectorAll('#org-tbody tr.expanded').forEach(r => r.classList.remove('expanded'));
+
+  expandedDomain = domain;
+  tr.classList.add('expanded');
+
+  const detailTr = buildDetailRowShell(domain);
+  tr.after(detailTr);
+  injectDetail(domain, detailTr.querySelector('.detail-panel'));
+}
+
+function removeDetailRows(tbody) {
+  tbody.querySelectorAll('tr.detail-row').forEach(r => r.remove());
+}
+
+function buildDetailRowShell(domain) {
+  const tr = document.createElement('tr');
+  tr.classList.add('detail-row');
+  tr.dataset.detail = domain;
+  const td = document.createElement('td');
+  td.colSpan = 9;
+  td.innerHTML = `<div class="detail-panel"><div class="detail-loading"><span class="spinner"></span>Loading ${escHtml(domain)}…</div></div>`;
+  tr.appendChild(td);
+  return tr;
+}
+
+async function injectDetail(domain, panel) {
+  try {
+    const res  = await fetch(`/api/orgs/${encodeURIComponent(domain)}`);
+    const data = await res.json();
+    panel.innerHTML = renderDetailHTML(data);
+  } catch (err) {
+    panel.innerHTML = `<div class="detail-loading" style="color:var(--danger)">Error loading detail: ${escHtml(String(err))}</div>`;
+  }
+}
+
+function renderDetailHTML(d) {
+  const org     = d.org     || d || {};
+  const entity  = d.entity  || {};
+  const changes = d.changes || [];
+
+  // Stack section — full email config
+  const stackFields = [
+    ['Domain',        org.domain],
+    ['Platform',      org.platform],
+    ['MX Provider',   org.mx_provider],
+    ['SPF',           org.spf],
+    ['DKIM',          org.dkim],
+    ['DMARC Policy',  org.dmarc_policy],
+    ['DMARC RUA',     org.dmarc_rua],
+    ['TLS',           org.tls != null ? (org.tls ? 'Yes' : 'No') : null],
+    ['DLP',           org.dlp != null ? (org.dlp ? 'Enabled' : 'Disabled') : null],
+    ['Archiving',     org.archiving != null ? (org.archiving ? 'Yes' : 'No') : null],
+    ['MFA',           org.mfa != null ? (org.mfa ? 'Yes' : 'No') : null],
+    ['Security Score',org.security_score != null ? `${org.security_score}/100` : null],
+    ['Email Count',   org.email_count != null ? fmt(org.email_count) : null],
+    ['Last Seen',     relTime(org.last_seen)],
+    ['First Seen',    relTime(org.first_seen)],
+  ];
+
+  const stackRows = stackFields
+    .filter(([, v]) => v != null && v !== '' && v !== undefined)
+    .map(([k, v]) => `<div class="detail-row-item"><span class="k">${escHtml(k)}</span><span class="v">${escHtml(String(v))}</span></div>`)
+    .join('');
+
+  // Entity section
+  const entityFields = [
+    ['Name',       entity.name],
+    ['Industry',   entity.industry],
+    ['HQ',         entity.headquarters],
+    ['Employees',  entity.employee_count != null ? fmt(entity.employee_count) : null],
+    ['Revenue',    entity.revenue],
+    ['Founded',    entity.founded],
+    ['Website',    entity.website],
+    ['CRMSystem',  entity.crm_system],
+    ['Compliance', Array.isArray(entity.compliance) ? entity.compliance.join(', ') : entity.compliance],
+    ['Description',entity.description],
+  ];
+
+  const entityRows = entityFields
+    .filter(([, v]) => v != null && v !== '' && v !== undefined)
+    .map(([k, v]) => `<div class="detail-row-item"><span class="k">${escHtml(k)}</span><span class="v">${escHtml(String(v))}</span></div>`)
+    .join('') || '<div class="detail-row-item"><span class="k">No entity data</span></div>';
+
+  // Changes section
+  const changeMinis = changes.slice(0, 20).map(c => {
+    const sigBadge = signalBadge(c.signal);
+    return `<div class="change-item-mini">
+      <span class="ts">${fmtDate(c.detected_at || c.timestamp)}</span>
+      <span class="desc">
+        <span class="field">${escHtml(c.field_name || c.field || '?')}</span>
+        ${c.old_value != null ? `<span class="old">${escHtml(String(c.old_value))}</span><span class="arrow">→</span>` : ''}
+        ${c.new_value != null ? `<span class="new">${escHtml(String(c.new_value))}</span>` : ''}
+      </span>
+      ${sigBadge}
+    </div>`;
+  }).join('') || '<div class="detail-row-item"><span class="k">No changes on record</span></div>';
+
+  return `
+    <div class="detail-grid">
+      <div class="detail-section">
+        <h4>Email Stack</h4>
+        ${stackRows || '<div class="detail-row-item"><span class="k">No data</span></div>'}
+      </div>
+      <div class="detail-section">
+        <h4>Org / Entity</h4>
+        ${entityRows}
+      </div>
+      <div class="detail-section">
+        <h4>Change History</h4>
+        <div class="changes-list">${changeMinis}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════
+//  CHANGE FEED
+// ══════════════════════════════════════════
+async function loadChanges() {
+  document.getElementById('change-feed').innerHTML =
+    `<div class="empty-msg"><span class="spinner"></span>Loading changes…</div>`;
+
+  const days = document.getElementById('feed-days').value;
+  try {
+    const res = await fetch(`/api/changes?days=${days}`);
+    allChanges = await res.json();
+    renderChangeFeed();
+  } catch (err) {
+    document.getElementById('change-feed').innerHTML =
+      `<div class="empty-msg" style="color:var(--danger)">Error: ${escHtml(String(err))}</div>`;
+  }
+}
+
+function setSignalTab(btn, sig) {
+  document.querySelectorAll('.signal-tab').forEach(t => {
+    t.className = 'signal-tab';
+  });
+  btn.classList.add(`active-${sig}`);
+  activeSignal = sig;
+  renderChangeFeed();
+}
+
+function renderChangeFeed() {
+  const filtered = activeSignal === 'all'
+    ? allChanges
+    : allChanges.filter(c => (c.signal || 'neutral').toLowerCase() === activeSignal);
+
+  const feed = document.getElementById('change-feed');
+
+  if (filtered.length === 0) {
+    feed.innerHTML = `<div class="empty-msg">No changes in this window.</div>`;
+    return;
+  }
+
+  feed.innerHTML = filtered.map(c => {
+    const sig     = (c.signal || 'neutral').toLowerCase();
+    const sigClass= sig === 'positive' ? 'sig-positive' : sig === 'negative' ? 'sig-negative' : 'sig-neutral';
+    const ts      = c.detected_at || c.timestamp || '';
+    const orgName = c.org_name || c.domain || '?';
+    const field   = c.field_name || c.field || '?';
+    const category= c.category || '';
+
+    return `<div class="change-card ${sigClass}">
+      <div class="change-ts">
+        <span class="date">${fmtDate(ts)}</span>
+        <span class="time">${fmtTime(ts)}</span>
+      </div>
+      <div class="change-body">
+        <div class="change-org">${escHtml(orgName)}</div>
+        <div class="change-desc">
+          <span class="field">${escHtml(field)}</span>
+          ${c.old_value != null ? `<span class="old">${escHtml(String(c.old_value))}</span><span class="arrow">→</span>` : ' changed to '}
+          ${c.new_value != null ? `<span class="new">${escHtml(String(c.new_value))}</span>` : ''}
+        </div>
+      </div>
+      <div class="change-meta">
+        ${signalBadge(c.signal)}
+        ${category ? `<span class="badge-category">${escHtml(category)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════
+function dmarcBadgeClass(policy) {
+  switch ((policy || 'unknown').toLowerCase()) {
+    case 'reject':     return 'badge badge-reject';
+    case 'quarantine': return 'badge badge-quarantine';
+    case 'none':       return 'badge badge-none';
+    default:           return 'badge badge-unknown';
+  }
+}
+
+function signalBadge(sig) {
+  switch ((sig || 'neutral').toLowerCase()) {
+    case 'positive': return `<span class="badge badge-pos">positive</span>`;
+    case 'negative': return `<span class="badge badge-neg">negative</span>`;
+    default:         return `<span class="badge badge-neu">neutral</span>`;
+  }
+}
+
+function boolBadge(val) {
+  if (val === true  || val === 1 || val === 'true'  || val === 'yes') return `<span class="badge badge-yes">Yes</span>`;
+  if (val === false || val === 0 || val === 'false' || val === 'no')  return `<span class="badge badge-no">No</span>`;
+  return `<span class="badge badge-unknown">?</span>`;
+}
+
+function securityBar(score) {
+  if (score == null || score === '') return `<span style="color:var(--muted)">—</span>`;
+  const n   = parseInt(score, 10);
+  const clr = n >= 80 ? '#00d26a' : n >= 50 ? '#f5c842' : '#f92672';
+  return `<span style="color:${clr};font-weight:bold">${n}</span>`;
+}
+
+function relTime(iso) {
+  if (!iso) return '—';
+  const d    = new Date(iso);
+  if (isNaN(d)) return iso;
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs  < 24)  return `${hrs}h ago`;
+  const days= Math.floor(hrs / 24);
+  if (days < 30)  return `${days}d ago`;
+  return fmtDate(iso);
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function fmt(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString();
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+loadAll();
+</script>
+</body>
 </html>
