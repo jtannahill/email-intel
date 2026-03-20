@@ -1071,6 +1071,94 @@ function setSignalTab(btn, sig) {
   renderChangeFeed();
 }
 
+function explainChange(c) {
+  const f = c.field_name || c.field || '';
+  const o = c.old_value;
+  const n = c.new_value;
+  const sig = (c.signal || 'neutral').toLowerCase();
+
+  // DMARC
+  if (f === 'dmarc_policy') {
+    if (n === 'reject') return 'Strongest email authentication. Spoofed emails are blocked outright. Signals a mature security posture or regulatory compliance push.';
+    if (n === 'quarantine') return 'Moderate protection — spoofed emails go to spam. Often a stepping stone before full reject enforcement.';
+    if (n === 'none' || n === 'None') return 'No enforcement — spoofed emails get delivered. This is unusual for a legitimate org and may indicate a misconfiguration or intentional rollback.';
+    if (o && !n) return 'DMARC policy removed entirely. Could indicate DNS misconfiguration or infrastructure migration in progress.';
+  }
+
+  // TLS
+  if (f === 'tls_version') {
+    if (n === 'TLS1_3') return 'Upgraded to the latest TLS. Better performance and security. Normal for orgs actively maintaining their infrastructure.';
+    if (n === 'TLS1_2' && o === 'TLS1_3') return 'Downgraded from TLS 1.3. Unusual — may indicate legacy system compatibility issues or a load balancer change.';
+    if (!n || n === 'None') return 'TLS version not detected in this email. Likely routing variation — not necessarily a downgrade. Monitor next few emails.';
+    if (!o || o === 'None') return 'TLS version now visible in headers. Probably a routing change exposing different mail servers, not a new upgrade.';
+  }
+
+  // Platform
+  if (f === 'email_platform') {
+    if (o === 'on-prem-exchange' && n === 'm365') return 'Major cloud migration from on-prem Exchange to Microsoft 365. Significant IT investment — usually takes months to execute.';
+    if (o === 'on-prem-exchange' && n === 'google-workspace') return 'Cloud migration to Google Workspace. Major infrastructure decision, often driven by cost or collaboration needs.';
+    if (n === 'on-prem-exchange') return 'Moved back to on-prem. Unusual in 2026 — could indicate data sovereignty requirements or cost concerns with cloud licensing.';
+    if (o === 'm365' && n === 'google-workspace') return 'Switched cloud providers. Rare and disruptive — usually driven by cost renegotiation or strategic vendor consolidation.';
+    if (o === 'google-workspace' && n === 'm365') return 'Migrated to M365. Common for enterprises consolidating on Microsoft ecosystem.';
+  }
+
+  // Security gateway
+  if (f === 'security_gateway') {
+    if (!o && n) return `Added ${n} email security. This is an investment in threat protection — often triggered by a security incident, audit, or new CISO hire.`;
+    if (o && !n) return `Removed ${o} email security gateway. Concerning — could indicate cost-cutting, vendor switch in progress, or migration to built-in cloud protection.`;
+    if (o && n && o !== n) return `Switched from ${o} to ${n}. Vendor migration — usually driven by contract renewal, pricing, or feature gaps.`;
+  }
+  if (f === 'security_gateway_version') {
+    return 'Security gateway version changed. Routine if a minor bump; notable if a major version — indicates active security maintenance.';
+  }
+
+  // DLP
+  if (f === 'dlp_system') {
+    if (!o && n) return `Added ${n} data loss prevention. Compliance investment — often required by regulators, clients, or cyber insurance policies.`;
+    if (o && !n) return `${o} DLP no longer detected. Could be a vendor switch or removal — worth monitoring.`;
+  }
+
+  // MTA
+  if (f === 'mta_vendor') {
+    if (o && n) return `Mail server changed from ${o} to ${n}. Major infrastructure change — could indicate platform migration or M&A integration.`;
+    if (!o && n) return `Mail server identified as ${n}. First time seeing this infrastructure from this org.`;
+  }
+  if (f === 'mta_version') {
+    if (o && n) return 'Mail server version updated. Normal patching activity — indicates the org is actively maintaining their email infrastructure.';
+    if (!n || n === 'None') return 'Version no longer visible. Routing variation — different server handled this email.';
+  }
+
+  // Tenant
+  if (f === 'tenant_id') {
+    if (!o && n) return 'Microsoft 365 tenant ID appeared. Confirms M365 adoption or routing through Microsoft infrastructure.';
+    if (o && !n) return 'M365 tenant ID no longer present. Email may have been routed differently — not necessarily a platform change.';
+    if (o && n && o !== n) return 'Tenant ID changed. Could indicate M&A (merging into acquirer tenant) or organizational restructuring.';
+  }
+
+  // DKIM
+  if (f === 'dkim_domains') {
+    return 'DKIM signing domains changed. Often reflects new email service providers (marketing platforms, CRM, transactional email) or DNS changes. Normal operational churn.';
+  }
+
+  // TLS cipher
+  if (f === 'tls_cipher') {
+    if (!n || n === 'None') return 'Cipher not detected in this email. Routing variation — different path through mail servers.';
+    return 'Encryption cipher changed. Usually reflects server configuration updates. Stronger ciphers (AES-256, GCM) are positive.';
+  }
+
+  // SPF
+  if (f === 'spf_result') {
+    if (n === 'pass') return 'SPF now passing. The sending server is authorized for this domain — normal and expected.';
+    if (n === 'softfail' || n === 'fail') return 'SPF failing. The sending server may not be authorized — could indicate a misconfiguration or spoofing attempt.';
+  }
+
+  // Fallback
+  if (c.reasoning) return c.reasoning;
+  if (sig === 'positive') return 'This change suggests the organization is investing in their email infrastructure.';
+  if (sig === 'negative') return 'This change may indicate cost-cutting or a degradation in security posture. Worth monitoring.';
+  return 'Routine infrastructure change. Normal operational variation — monitor for patterns across multiple emails.';
+}
+
 function renderChangeFeed() {
   const filtered = activeSignal === 'all'
     ? allChanges
@@ -1090,6 +1178,7 @@ function renderChangeFeed() {
     const orgName = c.org_name || c.domain || '?';
     const field   = c.field_name || c.field || '?';
     const category= c.category || '';
+    const explanation = explainChange(c);
 
     return `<div class="change-card ${sigClass}">
       <div class="change-ts">
@@ -1103,6 +1192,7 @@ function renderChangeFeed() {
           ${c.old_value != null ? `<span class="old">${escHtml(String(c.old_value))}</span><span class="arrow">→</span>` : ' changed to '}
           ${c.new_value != null ? `<span class="new">${escHtml(String(c.new_value))}</span>` : ''}
         </div>
+        <div style="margin-top:6px;font-size:11px;color:#aaa;line-height:1.4;max-width:600px;">${escHtml(explanation)}</div>
       </div>
       <div class="change-meta">
         ${signalBadge(c.signal)}
