@@ -119,8 +119,15 @@ def build_scan_summary(emails: list[EmailAnalysis]) -> ScanSummary:
         now = datetime.now(tz=timezone.utc)
         return ScanSummary(total_messages=0, date_range=(now, now))
 
-    dates = [e.date for e in emails if e.date]
-    date_range = (min(dates), max(dates)) if dates else (
+    # Normalize all dates to aware (UTC) to avoid naive/aware comparison errors
+    aware_dates = []
+    for e in emails:
+        if e.date:
+            if e.date.tzinfo is None:
+                aware_dates.append(e.date.replace(tzinfo=timezone.utc))
+            else:
+                aware_dates.append(e.date)
+    date_range = (min(aware_dates), max(aware_dates)) if aware_dates else (
         datetime.now(tz=timezone.utc), datetime.now(tz=timezone.utc)
     )
 

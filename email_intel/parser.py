@@ -97,8 +97,11 @@ def extract_hops(msg: Message) -> list[ServerHop]:
 
     for i in range(1, len(hops)):
         if hops[i].timestamp and hops[i - 1].timestamp:
-            delta = (hops[i].timestamp - hops[i - 1].timestamp).total_seconds()
-            hops[i].latency_ms = round(delta * 1000, 1)
+            try:
+                delta = (hops[i].timestamp - hops[i - 1].timestamp).total_seconds()
+                hops[i].latency_ms = round(delta * 1000, 1)
+            except TypeError:
+                pass  # mixed naive/aware datetimes
 
     return hops
 
