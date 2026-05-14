@@ -4,26 +4,26 @@ Email header analysis tool + organizational infrastructure profiler with a web d
 
 ## What It Does
 
-- **Header Analysis** — Parse raw email headers to extract originating IP, relay chain, SPF/DKIM/DMARC status, and sending software
-- **IP Geolocation** — Resolve originating IPs via ip-api.com (default) or MaxMind GeoLite2
-- **Org Profiling** — Fingerprint sending infrastructure: ESP (Salesforce/HubSpot/Mailchimp/Marketo/etc.), CDN, mail server vendor, authentication posture
-- **Change Detection** — Rules-based classifier flags positive, negative, or neutral infrastructure changes when an org's stack changes between scans
-- **Plocamium Bridge** — Optional integration to push org signals into the Plocamium content engine pipeline
-- **Web Dashboard** — Local HTML dashboard at `localhost:8888` showing 147 profiled orgs, change feed, and scan history
+- **Header Analysis**: Parse raw email headers to extract originating IP, relay chain, SPF/DKIM/DMARC status, and sending software
+- **IP Geolocation**: Resolve originating IPs via ip-api.com (default) or MaxMind GeoLite2
+- **Org Profiling**: Fingerprint sending infrastructure: ESP (Salesforce/HubSpot/Mailchimp/Marketo/etc.), CDN, mail server vendor, authentication posture
+- **Change Detection**: Rules-based classifier flags positive, negative, or neutral infrastructure changes when an org's stack changes between scans
+- **Plocamium Bridge**: Optional integration to push org signals into the Plocamium content engine pipeline
+- **Web Dashboard**: Local HTML dashboard at `localhost:8888` showing 147 profiled orgs, change feed, and scan history
 
 ## Architecture
 
 ```
 CLI (Click + Rich)
     ↓
-parser.py       — Raw header → structured EmailAnalysis
-geo.py          — IP → GeoResult (ip-api or MaxMind)
-org_profiler.py — Domain → OrgStack (ESP, CDN, MX, DMARC)
-org_store.py    — SQLite persistence of org profiles + scan history
-org_classifier.py — Change classification (positive/negative/neutral)
-reporter.py     — Rich terminal output + JSON/CSV export
-dashboard.py    — Flask server for web dashboard
-plocamium_bridge.py — Optional signal push to Plocamium
+parser.py      : Raw header → structured EmailAnalysis
+geo.py         : IP → GeoResult (ip-api or MaxMind)
+org_profiler.py: Domain → OrgStack (ESP, CDN, MX, DMARC)
+org_store.py   : SQLite persistence of org profiles + scan history
+org_classifier.py: Change classification (positive/negative/neutral)
+reporter.py    : Rich terminal output + JSON/CSV export
+dashboard.py   : Flask server for web dashboard
+plocamium_bridge.py: Optional signal push to Plocamium
 ```
 
 ## Usage
