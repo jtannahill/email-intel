@@ -1,5 +1,10 @@
 # Email Intel
 
+![Status](https://img.shields.io/badge/status-active-success)
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
+![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazonwebservices&logoColor=white)
+![Last Commit](https://img.shields.io/github/last-commit/jtannahill/email-intel)
+
 Email header analysis tool + organizational infrastructure profiler with a web dashboard. Paste raw email headers and get IP geolocation, sending stack fingerprinting, org profiling, and change detection across 147 organizations.
 
 ## What It Does
