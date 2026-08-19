@@ -54,7 +54,7 @@ def _analyze_single(raw_headers: str, cfg, fmt: str, output_path: str | None):
 @click.group()
 @click.version_option(version=__version__)
 def main():
-    """Email Intel — Personal inbox intelligence."""
+    """Email Intel: email header analysis and sender infrastructure profiling."""
     pass
 
 

@@ -109,7 +109,7 @@ def render_scan_summary(summary: ScanSummary) -> str:
         console.print(f"\n[yellow bold]⚠ {len(summary.flagged_messages)} flagged messages:[/yellow bold]")
         for msg in summary.flagged_messages[:20]:
             flags = ", ".join(msg.flags)
-            console.print(f"  • {msg.from_addr or '?'} — {msg.subject or '(no subject)'} [{flags}]")
+            console.print(f"  • {msg.from_addr or '?'} : {msg.subject or '(no subject)'} [{flags}]")
 
     return console.file.getvalue()
 

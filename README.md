@@ -27,8 +27,16 @@ org_profiler.py: Domain → OrgStack (ESP, CDN, MX, DMARC)
 org_store.py   : SQLite persistence of org profiles + scan history
 org_classifier.py: Change classification (positive/negative/neutral)
 reporter.py    : Rich terminal output + JSON/CSV export
-dashboard.py   : Flask server for web dashboard
+dashboard.py   : Stdlib HTTP server for the web dashboard
 plocamium_bridge.py: Optional signal push to Plocamium
+```
+
+## Install
+
+```bash
+pipx install email-intel            # or: uv tool install email-intel
+pipx install 'email-intel[gmail]'   # with Gmail API support
+pipx install 'email-intel[maxmind]' # with MaxMind GeoLite2 support
 ```
 
 ## Usage

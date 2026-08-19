@@ -62,7 +62,7 @@ def is_private_ip(ip_str: str) -> bool:
         addr = ipaddress.ip_address(ip_str)
         return any(addr in net for net in _RFC1918)
     except ValueError:
-        # Not a valid IP address — treat as non-routable / skip it
+        # Not a valid IP address: treat as non-routable / skip it
         return True
 
 

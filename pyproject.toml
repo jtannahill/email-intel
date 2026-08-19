@@ -1,12 +1,27 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "email-intel"
-version = "0.1.0"
-description = "Personal inbox intelligence — email header analysis CLI"
+version = "1.0.0"
+description = "Email header analysis and sender-infrastructure profiling: originating IP, relay chain, SPF/DKIM/DMARC, ESP and CDN fingerprinting, change detection"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "James Tannahill" }]
 requires-python = ">=3.11"
+keywords = ["email", "headers", "spf", "dkim", "dmarc", "osint", "esp", "forensics"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: Information Technology",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Communications :: Email",
+  "Topic :: Security",
+  "Topic :: Utilities",
+]
 dependencies = [
     "click>=8.1",
     "rich>=13.0",
@@ -22,5 +37,16 @@ gmail = [
 maxmind = ["geoip2>=4.8"]
 dev = ["pytest>=8.0", "pytest-cov>=4.1"]
 
+[project.urls]
+Homepage = "https://github.com/jtannahill/email-intel"
+Repository = "https://github.com/jtannahill/email-intel"
+Issues = "https://github.com/jtannahill/email-intel/issues"
+
 [project.scripts]
 email-intel = "email_intel.cli:main"
+
+[tool.setuptools]
+packages = ["email_intel"]
+
+[tool.setuptools.package-data]
+email_intel = ["dashboard.html"]
