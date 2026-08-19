@@ -34,9 +34,15 @@ plocamium_bridge.py: Optional signal push to Plocamium
 ## Install
 
 ```bash
-pipx install email-intel            # or: uv tool install email-intel
-pipx install 'email-intel[gmail]'   # with Gmail API support
-pipx install 'email-intel[maxmind]' # with MaxMind GeoLite2 support
+pipx install email-header-intel            # or: uv tool install email-header-intel
+pipx install 'email-header-intel[gmail]'   # with Gmail API support
+pipx install 'email-header-intel[maxmind]' # with MaxMind GeoLite2 support
+```
+
+The PyPI package is `email-header-intel` (PyPI reserves `email-intel` as
+too similar to another project); the command is still `email-intel`.
+
+```bash
 ```
 
 ## Usage

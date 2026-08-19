@@ -3,7 +3,7 @@ requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "email-intel"
+name = "email-header-intel"
 version = "1.0.0"
 description = "Email header analysis and sender-infrastructure profiling: originating IP, relay chain, SPF/DKIM/DMARC, ESP and CDN fingerprinting, change detection"
 readme = "README.md"
