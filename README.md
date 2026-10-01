@@ -13,7 +13,7 @@ Email header analysis tool + organizational infrastructure profiler with a web d
 - **IP Geolocation**: Resolve originating IPs via ip-api.com (default) or MaxMind GeoLite2
 - **Org Profiling**: Fingerprint sending infrastructure: ESP (Salesforce/HubSpot/Mailchimp/Marketo/etc.), CDN, mail server vendor, authentication posture
 - **Change Detection**: Rules-based classifier flags positive, negative, or neutral infrastructure changes when an org's stack changes between scans
-- **Plocamium Bridge**: Optional integration to push org signals into the Plocamium content engine pipeline
+- **Signal Export**: Optional export of org infrastructure change signals to a local JSONL file or an S3 prefix
 - **Web Dashboard**: Local HTML dashboard at `localhost:8888` showing 147 profiled orgs, change feed, and scan history
 
 ## Architecture
@@ -28,7 +28,7 @@ org_store.py   : SQLite persistence of org profiles + scan history
 org_classifier.py: Change classification (positive/negative/neutral)
 reporter.py    : Rich terminal output + JSON/CSV export
 dashboard.py   : Stdlib HTTP server for the web dashboard
-plocamium_bridge.py: Optional signal push to Plocamium
+plocamium_bridge.py: Optional signal export (local JSONL or S3)
 ```
 
 ## Install
@@ -70,13 +70,13 @@ email-intel analyze --headers "..." --format json --output result.json
 - **CLI:** Click + Rich (terminal output)
 - **Geo:** ip-api.com (free tier) or MaxMind GeoLite2 DB
 - **Storage:** SQLite (org profiles, scan history, change log)
-- **Dashboard:** Flask + vanilla JS (local only)
+- **Dashboard:** Python stdlib `http.server` + vanilla JS (local only)
 - **Tests:** pytest, 105 tests
 
 ## Setup
 
 ```bash
-pip install -e .
-cp config.example.yaml config.yaml   # configure geo provider, Plocamium token
+pip install email-header-intel   # or, from a clone: pip install -e .
+# optional config: ~/.email-intel/config.toml (geo provider, signal export)
 email-intel --help
 ```
